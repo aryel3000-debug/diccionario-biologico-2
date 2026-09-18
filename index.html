@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diccionario Biológico - Hamer & Rafa Mejía</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col items-center p-4 md:p-8">
+
+  https://cjnwrivplltlglxlvgbn.supabase.co/rest/v1/
+    const SUPABASE_ANON_KEY = "AQUI_TU_CLAVE_ANONIMA_DE_SUPABASE";
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  </script>
+
+  <!-- Cabecera -->
+  <header class="w-full max-w-4xl flex justify-between items-center py-4 mb-8 border-b border-slate-200">
+    <div>
+      <h1 class="text-xl font-semibold tracking-tight text-slate-900">Diccionario Biológico</h1>
+      <p class="text-xs text-slate-500">Modelo Dr. Hamer & Materiales Rafa Mejía (Consulta Estricta)</p>
+    </div>
+    <span class="text-xs bg-slate-200 text-slate-700 px-3 py-1.5 rounded-md font-medium">Consulta Rápida</span>
+  </header>
+
+  <!-- Buscador Gigante -->
+  <div class="w-full max-w-2xl text-center my-6">
+    <h2 class="text-2xl md:text-3xl font-normal text-slate-700 mb-6">Consulta rápida de fichas biológicas</h2>
+    <input 
+      type="text" 
+      id="buscador" 
+      placeholder="Busca por patología, órgano, conflicto, hoja embrionaria..." 
+      class="w-full px-6 py-4 text-base bg-white border border-slate-300 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+      oninput="filtrarFichas()"
+    >
+  </div>
+
+  <!-- Contenedor de Resultados -->
+  <div id="resultados" class="w-full max-w-2xl space-y-4 mt-4">
+    <p class="text-center text-slate-400 py-8">Cargando base de datos clínica...</p>
+  </div>
+
+  <!-- Modal / Vista de Detalle -->
+  <div id="modal" class="fixed inset-0 bg-black/40 backdrop-blur-sm hidden justify-center items-center p-4 z-50">
+    <div class="bg-white w-full max-w-2xl rounded-2xl shadow-xl overflow-hidden max-h-[90vh] flex flex-col">
+      <div class="p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50">
+        <div>
+          <span id="modal-fuente" class="text-xs px-2.5 py-1 rounded-full font-medium mb-2 inline-block"></span>
+          <h2 id="modal-patologia" class="text-2xl font-semibold text-slate-900"></h2>
+        </div>
+        <button onclick="cerrarModal()" class="text-slate-400 hover:text-slate-600 font-bold text-xl px-2">✕</button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-4 text-sm">
+        <div>
+          <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Órgano / Tejido</span>
+          <p id="modal-organo" class="text-slate-800 font-medium"></p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Hoja Embrionaria</span>
+          <p id="modal-hoja" class="text-slate-800 font-medium"></p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Conflicto Biológico</span>
+          <p id="modal-conflicto" class="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 mt-1"></p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Percepción Específica</span>
+          <p id="modal-percepcion" class="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 mt-1"></p>
+        </div>
+        <div>
+          <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Fase Activa</span>
+          <p id="modal-faseactiva" class="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 mt-1"></p>
+        </div>
+        <div id="bloque-solucion">
+          <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Fase de Solución (PCL)</span>
+          <p id="modal-fasesolucion" class="text-slate-700 bg-slate-50 p-3 rounded-lg border border-slate-100 mt-1"></p>
+        </div>
+      </div>
+
+      <div class="p-4 bg-slate-100 border-t border-slate-200 text-xs text-slate-500 flex justify-between items-center">
+        <span>Referencia oficial: <strong id="modal-referencia"></strong></span>
+        <span class="italic">Cero interpretaciones</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lógica de Búsqueda -->
+  <script>
+    let todasLasFichas = [];
+
+    async function cargarFichas() {
+      const { data, error } = await supabaseClient.from('fichas').select('*').order('patologia');
+      if (error) {
+        document.getElementById('resultados').innerHTML = '<p class="text-center text-red-500 py-8">Error al conectar con la base de datos. Revisa las claves.</p>';
+        return;
+      }
+      todasLasFichas = data || [];
+      renderizarResultados(todasLasFichas);
+    }
+
+    function renderizarResultados(fichas) {
+      const contenedor = document.getElementById('resultados');
+      if (fichas.length === 0) {
+        contenedor.innerHTML = '<p class="text-center text-slate-400 py-8">No se encontraron registros coincidentes.</p>';
+        return;
+      }
+
+      contenedor.innerHTML = fichas.map(f => `
+        <div onclick='abrirModal(${JSON.stringify(f).replace(/'/g, "&apos;")})' className="" class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col gap-2">
+          <div class="flex justify-between items-start">
+            <h3 class="text-lg font-medium text-slate-900">${f.patologia}</h3>
+            <span class="text-xs px-2.5 py-1 rounded-full font-medium shrink-0 ${f.fuente.includes('Hamer') ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">
+              ${f.fuente}
+            </span>
+          </div>
+          <div class="flex gap-4 text-sm text-slate-600">
+            <p><strong class="text-slate-700">Órgano:</strong> ${f.organo}</p>
+            <p><strong class="text-slate-700">Capa:</strong> ${f.hoja_embrionaria}</p>
+          </div>
+          <p class="text-xs text-slate-500 line-clamp-1"><strong class="text-slate-600">Conflicto:</strong> ${f.conflicto_biologico}</p>
+        </div>
+      `).join('');
+    }
+
+    function filtrarFichas() {
+      const texto = document.getElementById('buscador').value.toLowerCase();
+      const filtradas = todasLasFichas.filter(f => 
+        f.patologia.toLowerCase().includes(texto) ||
+        f.organo.toLowerCase().includes(texto) ||
+        f.conflicto_biologico.toLowerCase().includes(texto) ||
+        f.hoja_embrionaria.toLowerCase().includes(texto)
+      );
+      renderizarResultados(filtradas);
+    }
+
+    function abrirModal(f) {
+      document.getElementById('modal-patologia').innerText = f.patologia;
+      document.getElementById('modal-organo').innerText = f.organo;
+      document.getElementById('modal-hoja').innerText = f.hoja_embrionaria;
+      document.getElementById('modal-conflicto').innerText = f.conflicto_biologico;
+      document.getElementById('modal-percepcion').innerText = f.percepcion;
+      document.getElementById('modal-faseactiva').innerText = f.fase_activa;
+      document.getElementById('modal-referencia').innerText = f.referencia;
+      
+      const badgeFuente = document.getElementById('modal-fuente');
+      badgeFuente.innerText = f.fuente;
+      badgeFuente.className = `text-xs px-2.5 py-1 rounded-full font-medium mb-2 inline-block ${f.fuente.includes('Hamer') ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}`;
+
+      const bloqueSolucion = document.getElementById('bloque-solucion');
+      if (f.fase_solucion) {
+        document.getElementById('modal-fasesolucion').innerText = f.fase_solucion;
+        bloqueSolucion.style.display = 'block';
+      } else {
+        bloqueSolucion.style.display = 'none';
+      }
+
+      document.getElementById('modal').classList.remove('hidden');
+      document.getElementById('modal').classList.add('flex');
+    }
+
+    function cerrarModal() {
+      document.getElementById('modal').classList.add('hidden');
+      document.getElementById('modal').classList.remove('flex');
+    }
+
+    // Inicializar
+    cargarFichas();
+  </script>
+</body>
+</html>
